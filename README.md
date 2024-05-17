@@ -22,7 +22,7 @@
 ### [1] Remote Repository
 
 ```shell
-pip install --upgrade git+https://github.com/leekh4232/py-geocoder/dist/py_geocoder-0.1.0-py3-none-any.whl
+pip install --upgrade https://raw.githubusercontent.com/leekh4232/py-geocoder/main/dist/py_geocoder-0.1.0-py3-none-any.whl
 ```
 
 
