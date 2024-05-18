@@ -33,5 +33,5 @@ pip uninstall -y py-geocoder
 터미널에서 다음의 명령을 수행합니다.
 
 ```shell
-$ py-geocoder --key={브이월드OpenAPI키} --input=주소가작성된엑셀,CSV파일경로 --addr=주소필드이름
+$ py-geocoder --key={브이월드OpenAPI키} --input={주소가작성된엑셀,CSV파일경로} --addr={주소필드이름}
 ```
