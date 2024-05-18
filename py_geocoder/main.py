@@ -99,7 +99,6 @@ def geocode_process(df: DataFrame, addr: str, key: str) -> DataFrame:
                 )
 
             for p in futures.as_completed(processes):
-                # 각 회귀 함수의 결과값(회귀모형 객체)을 저장한다.
                 index, latitude, longitude = p.result()
                 data.loc[index, 'latitude'] = latitude
                 data.loc[index, 'longitude'] = longitude
