@@ -1,6 +1,4 @@
-# hossam-data-util
-
-이광호 강사 데이터 분석 유틸리티 
+# py-geocoder 
 
 
 ![Badge](https://img.shields.io/badge/Author-Lee%20KwangHo-blue.svg?style=flat-square&logo=appveyor) &nbsp;
@@ -10,10 +8,7 @@
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=appveyor) &nbsp;
 ![Pandas](https://img.shields.io/badge/Pandas-150458?style=flat-square&logo=appveyor) &nbsp;
 
-## Hello World
-
-이 자료는 주영아(j.purplerose@gmail.com)의 논문 작업에 활용되기 위해 작성된 Geocoder 툴 입니다.
-
+이 자료는 연세대학교 도시공학과 주영아(j.purplerose@gmail.com)의 논문 프로젝트에 활용되기 위해 작성된 Geocoder 툴 입니다.
 
 ## Installation
 
