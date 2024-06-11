@@ -106,7 +106,7 @@ def geocode_process(df: DataFrame, addr: str, key: str) -> DataFrame:
             for p in futures.as_completed(processes):
                 result = p.result()
 
-                if result is None:
+                if result is not None:
                     index, latitude, longitude = result
                     data.loc[index, 'latitude'] = latitude
                     data.loc[index, 'longitude'] = longitude
