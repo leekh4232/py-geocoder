@@ -66,9 +66,11 @@ def geocode_item(index: int, addr: str, key: str) -> dict:
     if status == 'ERROR':
         error_code = result['response']['error']['code']
         error_text = result['response']['error']['text']
-        raise requests.exceptions.RequestException(f"[{error_code}] {error_text}")
+        #raise requests.exceptions.RequestException(f"[{error_code}] {error_text}")
+        return None
     elif status == 'NOT_FOUND':
-        raise requests.exceptions.RequestException("주소를 찾을 수 없습니다.")
+        #raise requests.exceptions.RequestException("주소를 찾을 수 없습니다.")
+        return None
 
     longitude = result['response']['result']['point']['x']
     latitude = result['response']['result']['point']['y']
@@ -101,11 +103,14 @@ def geocode_process(df: DataFrame, addr: str, key: str) -> DataFrame:
                 )
 
             for p in futures.as_completed(processes):
-                index, latitude, longitude = p.result()
-                data.loc[index, 'latitude'] = latitude
-                data.loc[index, 'longitude'] = longitude
-                pbar.update(1)
-                success += 1
+                result = p.result()
+
+                if result is None:
+                    index, latitude, longitude = result
+                    data.loc[index, 'latitude'] = latitude
+                    data.loc[index, 'longitude'] = longitude
+                    pbar.update(1)
+                    success += 1
 
     data['latitude'] = data['latitude'].astype(float)
     data['longitude'] = data['longitude'].astype(float)
