@@ -56,7 +56,8 @@ def geocode_item(index: int, addr: str, key: str) -> dict:
     response: requests.Response = requests.get(url)
 
     if response.status_code != 200:
-        raise requests.exceptions.RequestException("API 요청에 실패했습니다.")
+        #raise requests.exceptions.RequestException("API 요청에 실패했습니다.")
+        return None
 
     response.encoding = 'utf-8'
     result = response.json()
