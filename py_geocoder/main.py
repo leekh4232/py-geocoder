@@ -67,11 +67,8 @@ def geocode_item(index: int, addr: str, key: str) -> dict:
         error_code = result['response']['error']['code']
         error_text = result['response']['error']['text']
         raise requests.exceptions.RequestException(f"[{error_code}] {error_text}")
-    
-    resp = result['response']
-
-    if 'result' not in resp:
-        raise requests.exceptions.RequestException("결과가 존재하지 않습니다.")
+    elif status == 'NOT_FOUND':
+        raise requests.exceptions.RequestException("주소를 찾을 수 없습니다.")
 
     longitude = result['response']['result']['point']['x']
     latitude = result['response']['result']['point']['y']
