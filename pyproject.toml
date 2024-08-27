@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "py-geocoder"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["이광호 <leekh4232@gmail.com>"]
 readme = "README.md"
