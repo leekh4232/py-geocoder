@@ -52,16 +52,21 @@ def geocode_item(index: int, addr: str, key: str) -> dict:
     time.sleep(0.5)
 
     if not addr:
-        raise ValueError("주소가 존재하지 않습니다.")
+        errMsg = "주소가 존재하지 않습니다."
+        raise ValueError(errMsg)
+        # typer.echo(errMsg)
+        # return None, errMsg, index, addr
 
     url: str = (
         f"https://api.vworld.kr/req/address?service=address&request=getCoord&key={key}&address={addr}&type=ROAD&format=json"
     )
+    typer.echo(url)
     response: requests.Response = requests.get(url)
 
     if response.status_code != 200:
-        # raise requests.exceptions.RequestException("API 요청에 실패했습니다.")
-        return None
+        errMsg = f"[{index}] {addr} >>> API 요청에 실패했습니다."
+        raise Exception(errMsg)
+        # return None, errMsg, index, addr
 
     response.encoding = "utf-8"
     result = response.json()
@@ -71,17 +76,22 @@ def geocode_item(index: int, addr: str, key: str) -> dict:
     if status == "ERROR":
         error_code = result["response"]["error"]["code"]
         error_text = result["response"]["error"]["text"]
-        # raise requests.exceptions.RequestException(f"[{error_code}] {error_text}")
-        return None
+
+        errMsg = f"[{index}] {addr} >>> [{error_code}] {error_text}"
+        raise Exception(errMsg)
+        # typer.echo(errMsg)
+        # return None, errMsg, index, addr
     elif status == "NOT_FOUND":
-        # raise requests.exceptions.RequestException("주소를 찾을 수 없습니다.")
-        return None
+        errMsg = f"[{index}] {addr} >>> 주소를 찾을 수 없습니다."
+        raise Exception(errMsg)
+        # typer.echo(errMsg)
+        # return None, errMsg, index, addr
 
     longitude = result["response"]["result"]["point"]["x"]
     latitude = result["response"]["result"]["point"]["y"]
     result: tuple[int, Any, Any] = (index, latitude, longitude)
     # print(result)
-    return result
+    return result, index, addr
 
 
 def geocode_process(df: DataFrame, addr: str, key: str) -> DataFrame:
@@ -92,28 +102,37 @@ def geocode_process(df: DataFrame, addr: str, key: str) -> DataFrame:
 
     typer.echo("------------------------------------------")
 
-    with tqdm(total=size, colour="yellow") as pbar:
-        with futures.ThreadPoolExecutor(max_workers=5) as executor:
-            for i in range(size):
-                address: str = str(data.loc[i, addr]).strip()
+    with open("geocoder.log", "w", encoding="utf-8") as f:
+        with tqdm(total=size, colour="yellow") as pbar:
+            with futures.ThreadPoolExecutor(max_workers=10) as executor:
+                for i in range(size):
+                    address: str = str(data.loc[i, addr]).strip()
 
-                if address == "nan":
-                    pbar.update(1)
-                    continue
+                    if address == "nan":
+                        pbar.update(1)
+                        continue
 
-                processes.append(
-                    executor.submit(geocode_item, index=i, addr=address, key=key)
-                )
+                    processes.append(
+                        executor.submit(geocode_item, index=i, addr=address, key=key)
+                    )
 
-            for p in futures.as_completed(processes):
-                result = p.result()
+                for p in futures.as_completed(processes):
+                    try:
+                        result, index, addr = p.result()
+                    except Exception as exc:
+                        typer.echo(exc)
+                        f.write(str(exc))
+                        f.write("\n")
 
-                if result is not None:
-                    index, latitude, longitude = result
-                    data.loc[index, "latitude"] = latitude
-                    data.loc[index, "longitude"] = longitude
-                    pbar.update(1)
-                    success += 1
+                        if str(exc).find("LIMIT") > -1:
+                            executor.shutdown(wait=True, cancel_futures=True)
+                    else:
+                        index, latitude, longitude = result
+                        data.loc[index, "latitude"] = latitude
+                        data.loc[index, "longitude"] = longitude
+                        f.write(f"[{index}] {addr} >> {latitude}, {longitude}")
+                        pbar.update(1)
+                        success += 1
 
     data["latitude"] = data["latitude"].astype(float)
     data["longitude"] = data["longitude"].astype(float)
