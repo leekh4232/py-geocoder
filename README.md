@@ -1,4 +1,4 @@
-# py-geocoder 
+# py-geocoder
 
 
 ![Badge](https://img.shields.io/badge/Author-Lee%20KwangHo-blue.svg?style=flat-square&logo=appveyor) &nbsp;
@@ -21,7 +21,7 @@
 ### [1] Remote Repository
 
 ```shell
-pip install --upgrade https://raw.githubusercontent.com/leekh4232/py-geocoder/main/dist/py_geocoder-0.1.0-py3-none-any.whl
+pip install --upgrade https://raw.githubusercontent.com/leekh4232/py-geocoder/main/dist/py_geocoder-0.1.1-py3-none-any.whl
 ```
 
 
