@@ -11,15 +11,12 @@ import time
 app = typer.Typer()
 
 
+
 def check_path(input: str, output: str = None) -> tuple[str, str, str]:
     input = path.abspath(input)
 
     if output is None:
-        output = (
-            path.splitext(input)[0].replace(" ", "_")
-            + "_geocoded"
-            + path.splitext(input)[1]
-        )
+        output = path.splitext(input)[0].replace(' ', '_') + '_geocoded' + path.splitext(input)[1]
 
     typer.echo("입력파일: %s" % input)
     typer.echo("출력파일: %s" % output)
@@ -30,12 +27,13 @@ def check_path(input: str, output: str = None) -> tuple[str, str, str]:
     return input, output
 
 
+
 def get_dataframe(input: str, addr: str) -> DataFrame:
     extname: str = path.splitext(input)[1].lower()
 
-    if extname == ".csv":
-        df: DataFrame = read_csv(filepath_or_buffer=input, encoding="utf-8")
-    elif extname == ".xlsx":
+    if extname == '.csv':
+        df: DataFrame = read_csv(filepath_or_buffer=input, encoding='utf-8')
+    elif extname == '.xlsx':
         df: DataFrame = read_excel(io=input)
     else:
         raise ValueError("지원하지 않는 파일 형식입니다.")
@@ -48,50 +46,50 @@ def get_dataframe(input: str, addr: str) -> DataFrame:
     return df
 
 
-def geocode_item(index: int, addr: str, key: str) -> dict:
+def geocode_item(session, index: int, addr: str, key: str) -> dict:
     time.sleep(0.5)
 
     if not addr:
-        errMsg = "주소가 존재하지 않습니다."
-        raise ValueError(errMsg)
-        # typer.echo(errMsg)
-        # return None, errMsg, index, addr
+        raise ValueError("[Error] 주소가 존재하지 않습니다. (%d) -> %s" % (index, addr))
 
-    url: str = (
-        f"https://api.vworld.kr/req/address?service=address&request=getCoord&key={key}&address={addr}&type=ROAD&format=json"
-    )
-    typer.echo(url)
-    response: requests.Response = requests.get(url)
+    url: str = f"https://api.vworld.kr/req/address"
+    params = {
+        "service" : "address",
+        "request" : "getCoord",
+        "key": key,
+        "address" : addr,
+        "type" : "ROAD",
+        "format" : "json"
+    }
+
+    try:
+        response = session.get(url, params=params, timeout=(3, 30))
+    except requests.exceptions.Timeout as e:
+        raise e
 
     if response.status_code != 200:
-        errMsg = f"[{index}] {addr} >>> API 요청에 실패했습니다."
-        raise Exception(errMsg)
-        # return None, errMsg, index, addr
+        raise requests.exceptions.RequestException("[Error] API 요청에 실패했습니다. (%d) -> %s" % (index, addr))
+        #return None
 
-    response.encoding = "utf-8"
+    response.encoding = 'utf-8'
     result = response.json()
 
-    status = result["response"]["status"]
+    status = result['response']['status']
 
-    if status == "ERROR":
-        error_code = result["response"]["error"]["code"]
-        error_text = result["response"]["error"]["text"]
+    if status == 'ERROR':
+        error_code = result['response']['error']['code']
+        error_text = result['response']['error']['text']
+        raise requests.exceptions.RequestException(f"[{error_code}] {error_text} (%d) -> %s" % (index, addr))
+        #return None
+    elif status == 'NOT_FOUND':
+        raise requests.exceptions.RequestException("[Error] 주소를 찾을 수 없습니다. (%d) -> %s" % (index, addr))
+        #return None
 
-        errMsg = f"[{index}] {addr} >>> [{error_code}] {error_text}"
-        raise Exception(errMsg)
-        # typer.echo(errMsg)
-        # return None, errMsg, index, addr
-    elif status == "NOT_FOUND":
-        errMsg = f"[{index}] {addr} >>> 주소를 찾을 수 없습니다."
-        raise Exception(errMsg)
-        # typer.echo(errMsg)
-        # return None, errMsg, index, addr
-
-    longitude = result["response"]["result"]["point"]["x"]
-    latitude = result["response"]["result"]["point"]["y"]
-    result: tuple[int, Any, Any] = (index, latitude, longitude)
-    # print(result)
-    return result, index, addr
+    longitude = result['response']['result']['point']['x']
+    latitude = result['response']['result']['point']['y']
+    result: tuple[int, Any, Any] =  (index, latitude, longitude)
+    #print(result)
+    return result
 
 
 def geocode_process(df: DataFrame, addr: str, key: str) -> DataFrame:
@@ -100,58 +98,56 @@ def geocode_process(df: DataFrame, addr: str, key: str) -> DataFrame:
     success = 0
     processes = []
 
+    session = requests.Session()
+
     typer.echo("------------------------------------------")
 
-    with open("geocoder.log", "w", encoding="utf-8") as f:
-        with tqdm(total=size, colour="yellow") as pbar:
-            with futures.ThreadPoolExecutor(max_workers=10) as executor:
-                for i in range(size):
-                    address: str = str(data.loc[i, addr]).strip()
+    with tqdm(total=size, colour="yellow") as pbar:
+        with futures.ThreadPoolExecutor(max_workers=10) as executor:
+            for i in range(size):
+                address: str = str(data.loc[i, addr]).strip()
 
-                    if address == "nan":
-                        pbar.update(1)
-                        continue
+                if address == 'nan':
+                    pbar.update(1)
+                    data.loc[i, 'latitude'] = None
+                    data.loc[i, 'longitude'] = None
+                    continue
 
-                    processes.append(
-                        executor.submit(geocode_item, index=i, addr=address, key=key)
+                processes.append(
+                    executor.submit(
+                        geocode_item, session, index=i, addr=address, key=key
                     )
+                )
 
-                for p in futures.as_completed(processes):
-                    try:
-                        result, index, addr = p.result()
-                    except Exception as exc:
-                        typer.echo(exc)
-                        f.write(str(exc))
-                        f.write("\n")
+            for p in futures.as_completed(processes):
+                try:
+                    result = p.result()
 
-                        if str(exc).find("LIMIT") > -1:
-                            executor.shutdown(wait=True, cancel_futures=True)
-                    else:
+                    if result is not None:
                         index, latitude, longitude = result
-                        data.loc[index, "latitude"] = latitude
-                        data.loc[index, "longitude"] = longitude
-                        f.write(f"[{index}] {addr} >> {latitude}, {longitude}")
-                        pbar.update(1)
+                        data.loc[index, 'latitude'] = latitude
+                        data.loc[index, 'longitude'] = longitude
                         success += 1
+                except Exception as e:
+                    typer.echo(e)
+                    #executor.shutdown(wait=False, cancel_futures=True)
+                finally:
+                    pbar.update(1)
 
-    data["latitude"] = data["latitude"].astype(float)
-    data["longitude"] = data["longitude"].astype(float)
 
     typer.echo("------------------------------------------")
-    typer.echo(
-        f"총 {size}개의 데이터 중 {success}개의 데이터가 성공적으로 처리되었습니다."
-    )
+
+    data['latitude'] = data['latitude'].astype(float)
+    data['longitude'] = data['longitude'].astype(float)
+
+    typer.echo("------------------------------------------")
+    typer.echo(f"총 {size}개의 데이터 중 {success}개의 데이터가 성공적으로 처리되었습니다.")
 
     return data
 
-
 @app.command()
-def main(
-    key: str = typer.Option(),
-    input: str = typer.Option(),
-    output: str = None,
-    addr: str = "ADDR",
-) -> None:
+def main(key: str = "25DE1852-F870-357A-AF47-169CE76AA841", input: str = typer.Option(), output: str = None, addr: str = '도로명') -> None:
+    #def main(key: str = typer.Option(), input: str = typer.Option(), output: str = None, addr: str = 'ADDR') -> None:
     """
     -----------\n
     브이월드 OpenAPI와 연동하여 GeoCoding을 수행하고 결과를 파일로 저장합니다.\n \n
@@ -163,6 +159,7 @@ def main(
         - addr (str, optional): 주소 필드 이름. Defaults to 'ADDR'.\n
     -----------\n
     """
+
     input, output = check_path(input=input, output=output)
     df: DataFrame = get_dataframe(input=input, addr=addr)
     result: DataFrame = geocode_process(df=df, addr=addr, key=key)
