@@ -11,12 +11,15 @@ import logging as logger
 
 app = typer.Typer()
 
-logfileName = dt.now().strftime("py-geocoder-%Y%m%d-%H%M%S.log")
+
+logfileName = dt.now().strftime("py-geocoder-%Y%m%d-%H.log")
+
 logger.basicConfig(
     filename=logfileName,
     level=logger.INFO,
     encoding="utf-8",
     format="%(asctime)s %(levelname)s:%(message)s",
+    filemode="a",
     datefmt="[%m/%d/%Y %I:%M:%S %p]",
 )
 
@@ -150,8 +153,9 @@ def geocode_process(df: DataFrame, addr: str, key: str) -> DataFrame:
                         executor.shutdown(wait=False, cancel_futures=True)
 
                         if i > 0:
-                            data.iloc[:i].to_excel("진행완료_데이터.xlsx", index=False)
-                            data.iloc[i:].to_excel("진행중_데이터.xlsx", index=False)
+                            t = dt.now().strftime("%y%m%d_%H%M%S")
+                            data.iloc[:i].to_excel("finish_%s.xlsx" % t, index=False)
+                            data.iloc[i:].to_excel("remind_%s.xlsx" % t, index=False)
 
                         raise e
                     finally:
@@ -172,9 +176,10 @@ def geocode_process(df: DataFrame, addr: str, key: str) -> DataFrame:
 
 @app.command()
 def main(
-    # key: str = "25DE1852-F870-357A-AF47-169CE76AA841",
-    key: str = "E0B70A87-4BB5-3081-8CC8-23B42575DB15",
-    # key: str = "ABD3E6CE-9D11-3C9A-8E58-9D3A3499D1EF",
+    # key: str = "25DE1852-F870-357A-AF47-169CE76AA841", # 2020
+    # key: str = "E0B70A87-4BB5-3081-8CC8-23B42575DB15",  # 2019
+    # key: str = "ABD3E6CE-9D11-3C9A-8E58-9D3A3499D1EF", # 2018
+    key: str = "9D94A39E-E3D6-3C84-9661-0F461B04BCDD",  # 2021
     input: str = typer.Option(),
     output: str = None,
     addr: str = "도로명",
