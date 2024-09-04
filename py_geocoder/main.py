@@ -1,6 +1,7 @@
 import typer
 import requests
 import json
+import os
 import concurrent.futures as futures
 from os import path
 from datetime import datetime as dt
@@ -24,13 +25,25 @@ logger.basicConfig(
 )
 
 
-def check_path(input: str, output: str = None) -> tuple[str, str, str]:
+def check_path(
+    input: str, output: str = None, remind: str = None
+) -> tuple[str, str, str]:
     input = path.abspath(input)
+
+    t = dt.now().strftime("%y%m%d_%H%M%S")
 
     if output is None:
         output = (
             path.splitext(input)[0].replace(" ", "_")
-            + "_geocoded"
+            + "_output_"
+            + t
+            + path.splitext(input)[1]
+        )
+
+        remind = (
+            path.splitext(input)[0].replace(" ", "_")
+            + "_remind_"
+            + t
             + path.splitext(input)[1]
         )
 
@@ -43,7 +56,7 @@ def check_path(input: str, output: str = None) -> tuple[str, str, str]:
         )
         raise err
 
-    return input, output
+    return input, output, remind
 
 
 def get_dataframe(input: str, addr: str) -> DataFrame:
@@ -113,10 +126,13 @@ def geocode_item(session, index: int, addr: str, key: str) -> dict:
     return result
 
 
-def geocode_process(df: DataFrame, addr: str, key: str) -> DataFrame:
+def geocode_process(
+    df: DataFrame, addr: str, key: str, input: str, output: str, remind: str
+) -> DataFrame:
     data: DataFrame = df.copy()
     size: int = len(data)
     success = 0
+    fail = 0
 
     typer.echo("요청 데이터 개수: %d" % size)
 
@@ -144,45 +160,44 @@ def geocode_process(df: DataFrame, addr: str, key: str) -> DataFrame:
                         logger.warning(re)
                         data.loc[i, "latitude"] = None
                         data.loc[i, "longitude"] = None
+                        fail += 1
                     except ValueError as ve:
                         # typer.echo(ve)
                         logger.warning(ve)
                         data.loc[i, "latitude"] = None
                         data.loc[i, "longitude"] = None
+                        fail += 1
                     except Exception as e:
+                        fail += 1
                         executor.shutdown(wait=False, cancel_futures=True)
 
                         if i > 0:
-                            t = dt.now().strftime("%y%m%d_%H%M%S")
-                            data.iloc[:i].to_excel("finish_%s.xlsx" % t, index=False)
-                            data.iloc[i:].to_excel("remind_%s.xlsx" % t, index=False)
+                            data.iloc[:i].to_excel(output, index=False)
+                            # data.iloc[i:].to_excel(remind, index=False)
+                            os.remove(input)
+                            data.iloc[i:].to_excel(input, index=False)
 
                         raise e
                     finally:
+                        pbar.set_postfix({"success": success, "fail": fail})
                         pbar.update(1)
-
-    typer.echo("------------------------------------------")
 
     data["latitude"] = data["latitude"].astype(float)
     data["longitude"] = data["longitude"].astype(float)
-
+    data.to_excel(output, index=False)
     typer.echo("------------------------------------------")
-    typer.echo(
-        f"총 {size}개의 데이터 중 {success}개의 데이터가 성공적으로 처리되었습니다."
-    )
+    typer.echo(f"총 {size}개의 데이터 중 {success}개의 데이터가 처리되었습니다.")
+    typer.echo("------------------------------------------")
 
     return data
 
 
 @app.command()
 def main(
-    # key: str = "25DE1852-F870-357A-AF47-169CE76AA841", # 2020
-    # key: str = "E0B70A87-4BB5-3081-8CC8-23B42575DB15",  # 2019
-    # key: str = "ABD3E6CE-9D11-3C9A-8E58-9D3A3499D1EF", # 2018
-    key: str = "9D94A39E-E3D6-3C84-9661-0F461B04BCDD",  # 2021
+    key: str = typer.Option(),
     input: str = typer.Option(),
     output: str = None,
-    addr: str = "도로명",
+    addr: str = "address",
 ) -> None:
     # def main(key: str = typer.Option(), input: str = typer.Option(), output: str = None, addr: str = 'ADDR') -> None:
     """
@@ -198,13 +213,16 @@ def main(
     """
 
     try:
-        input, output = check_path(input=input, output=output)
+        input, output, remind = check_path(input=input, output=output)
         df: DataFrame = get_dataframe(input=input, addr=addr)
-        result: DataFrame = geocode_process(df=df, addr=addr, key=key)
-        result.to_excel(output, index=False)
+        geocode_process(
+            df=df, addr=addr, key=key, input=input, output=output, remind=remind
+        )
     except Exception as e:
         logger.error(e)
+        typer.echo("------------------------------------------")
         typer.echo(e)
+        typer.echo("------------------------------------------")
 
 
 if __name__ == "__main__":
